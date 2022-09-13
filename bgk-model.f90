@@ -134,8 +134,7 @@
                 a3 = a1*(1/Cap_lambda(i - 1) + 2) - a2*(1/lambda(k - 1) + 2) - zeta(j)*cos(thetaz(k))/r(i) - 1/Kn
 
                 c1 = (Cap_lambda(i - 1) + 1/Cap_lambda(i - 1) + 2)
-                c2 = dble(dir)*dx(i + ip)/z(j)/Kn*2d0*uP(i)
-                c3 = -dble(dir)*dx(i + ip)/z(j)
+                c2 = (lambda(k - 1) + 1/Cap_lambda(k - 1) + 2)
                 g(i, j, k) = g(i - 1, j, k)*c1 + g(i - 2, j, k)*c2 + g(i, j, k - 1)*c3 + g(i, j, k - 2)*c4 - uP(i)/Kn
              end do
           end do
