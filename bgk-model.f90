@@ -38,6 +38,7 @@
     !------------------------------------------------------------
     !Physical quantities----------------------------------------
     real(8), allocatable :: r(:), dr(:)            !(0:Nr)
+    real(8), allocatable :: zeta(:), dzeta(:)            !(0:Nr)
     real(8), allocatable :: thetaz(:), dthetaz(:)            !(0:Nthetaz)
     real(8), allocatable :: g(:, :, :)                 !(0:Nr,-Nz:Nz,)
     real(8), allocatable :: uP(:)                  !(0:Nr)
@@ -117,7 +118,7 @@
     !vdf -----------------------------------------------------
     subroutine COMPUTE_vdf()
        implicit none
-       real(8) :: c1, c2, c3
+       real(8) :: c1, c2
        real(8) :: a1, a2, a3 !?��̂ĕϐ�?��i?��m?��[?��g?��?��A,B,C)
        real(8) :: a, b, S0, S1, S2
        integer :: st, en, ip
@@ -132,15 +133,30 @@
                 a1 = (zeta(j)*cos(thetaz(k))/(dr(i - 1) + dr(i)))
                 a2 = (zeta(j)*sin(thetaz(k))/(dthetaz(k - 1) + dthetaz(k)*r(i)))
                 a3 = a1*(1/Cap_lambda(i - 1) + 2) - a2*(1/lambda(k - 1) + 2) - zeta(j)*cos(thetaz(k))/r(i) - 1/Kn
-
                 c1 = (Cap_lambda(i - 1) + 1/Cap_lambda(i - 1) + 2)
                 c2 = (lambda(k - 1) + 1/Cap_lambda(k - 1) + 2)
-                g(i, j, k) = g(i - 1, j, k)*c1 + g(i - 2, j, k)*c2 + g(i, j, k - 1)*c3 + g(i, j, k - 2)*c4 - uP(i)/Kn
+                g(i, j, k) = g(i - 1, j, k)*a1*c1/a3 + g(i - 2, j, k)*a1*Cap_lambda(i - 1)/a3 &
+                             + g(i, j, k - 1)*a2*c2/a3 + g(i, j, k - 2)*a2*lambda(k - 1)/a3 - uP(i)/Kn
              end do
           end do
        end do
        !$omp end do
        !$omp end parallel
-       end if
+    end subroutine
+!uPを計算する
+    subroutine COMPUTE_mac()
+       implicit none
+       real(8) :: g0, g1, g2
 
+       do i = 0, Nx
+          uP(i) = 0d0
+          do j = 0, Nzeta
+             do k = 0, Nthetaz
+                if (j == -1 .or. j == 0) cycle
+                g0 = 1d0/spi*g(i, j + 0)*dexp(-z(j + 0)*z(j + 0))
+                g1 = 1d0/spi*g(i, j + 1)*dexp(-z(j + 1)*z(j + 1))
+                uP(i) = uP(i) + 0.25d0*dz(j + 1)*(g0 + g1)
+             end do
+          end do
+       end do
     end subroutine
