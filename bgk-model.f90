@@ -15,6 +15,8 @@
     real(8) :: spi = dsqrt(4d0*datan(1d0)) !sqrt(pi)
     real(8) :: large = 1d99                !some very large value
     real(8) :: small = 1d-16               !some very small value
+    real(8) :: Cap_r = 1d2
+    real(8) :: Cap_zeta = 1d2
     integer :: display = 10                !if mod(n,display) = 0, then show the situation on the console
     integer :: proc                        !For cputime measurement
 
@@ -31,8 +33,6 @@
     !  integer :: FD_thetaz  !1-> 1st order finite difference, 2-> second order finite difference (Switch for accuracy)
     integer :: INT_zeta !1-> trapezoidal rule for integration, 2-> simpson rule (Switch for accuracy)
     integer :: INT_thetaz !1-> trapezoidal rule for integration, 2-> simpson rule (Switch for accuracy
-    integer :: cap_K !capital Z for the maximum value of thetaz(k) ??
-    integer :: cap_zeta !capital Z for the maximum value of zeta ??
     ! integer :: save1 !data save if mod(n,save1) = 0 ??
 
     !------------------------------------------------------------
@@ -83,7 +83,7 @@
     subroutine lattice_r()
        implicit none
        do i = 0, Nr
-          r(i) = 0.5d0*dble(i)/dble(Nr)
+          r(i) = Cap_r*dble(i)/dble(Nr)
        end do
        do i = 1, Nr
           dr(i) = r(i) - r(i - 1)
@@ -95,8 +95,8 @@
     !lattice for zeta
     subroutine lattice_zeta()
        implicit none
-       do j = 0, Nzeta
-          zeta(i) = 0.5d0*dble(i)/dble(Nzeta)
+       do i = 0, Nzeta
+          zeta(i) = Cap_zeta*dble(i)/dble(Nzeta)
        end do
        do i = 1, Nr
           dzeta(i) = zeta(i) - zeta(i - 1)
@@ -106,7 +106,7 @@
     subroutine lattice_thetaz()
        implicit none
        do k = 0, Nthetaz
-          zeta(i) = 0.5d0*dble(i)/dble(Nthetaz)
+          thetaz(i) = pi*dble(i)/dble(Nthetaz)
        end do
        do i = 1, Nr
           dthetaz(i) = thetaz(i) - thetaz(i - 1)
@@ -120,16 +120,14 @@
        implicit none
        real(8) :: c1, c2
        real(8) :: a1, a2, a3 !?��̂ĕϐ�?��i?��m?��[?��g?��?��A,B,C)
-       real(8) :: a, b, S0, S1, S2
-       integer :: st, en, ip
 !a3 =  (zeta(j)*cos(thetaz(k))/(dr(i-1)+dr(i))*(1/Cap_lambda(i-1)+2)-(zeta(j)*sin(thetaz(k))/(dthetaz(k-1)+dthetaz(k)*r(i)))*(1/lambda(k-1)+2)-zeta(j)*cos(thetaz(k))/r(i)-1/Kn)
 
        !?��_?��~?��[?��ϐ� Cap_lambda?��?��lambda?��̓O?��?��?��[?��o?��?��?��ŗp?��ӂ�?��?��
        !$omp parallel default(shared), private(i,j,c1,c2,c3)
        !$omp do
-       do k = 1, Cap_K/2
-          do j = dir*1, dir*Nz, dir
-             do i = st, en, dir
+       do k = 1, Nthetaz/2
+          do j = 1, Nzeta
+             do i = 1, Nr
                 a1 = (zeta(j)*cos(thetaz(k))/(dr(i - 1) + dr(i)))
                 a2 = (zeta(j)*sin(thetaz(k))/(dthetaz(k - 1) + dthetaz(k)*r(i)))
                 a3 = a1*(1/Cap_lambda(i - 1) + 2) - a2*(1/lambda(k - 1) + 2) - zeta(j)*cos(thetaz(k))/r(i) - 1/Kn
@@ -143,20 +141,44 @@
        !$omp end do
        !$omp end parallel
     end subroutine
+
 !uPを計算する
     subroutine COMPUTE_mac()
        implicit none
-       real(8) :: g0, g1, g2
-
-       do i = 0, Nx
-          uP(i) = 0d0
-          do j = 0, Nzeta
-             do k = 0, Nthetaz
-                if (j == -1 .or. j == 0) cycle
-                g0 = 1d0/spi*g(i, j + 0)*dexp(-z(j + 0)*z(j + 0))
-                g1 = 1d0/spi*g(i, j + 1)*dexp(-z(j + 1)*z(j + 1))
-                uP(i) = uP(i) + 0.25d0*dz(j + 1)*(g0 + g1)
+       use integral_mod
+       ! call integral(配列の大きさ,配列,刻み幅,積分結果,積分手法)
+       !  call integral(size(w,1),size(w,2),w,hx,hy,s,"simpson")
+       do i = 1, Nr
+          do j = 1, Nzeta
+             do k = 1, Cap_K/2
+                h(j, k) = zeta(j)**4*exp(-zeta(j)**2)*sin(thetaz(k))**2*g(i, j, k)
              end do
           end do
+          call integral(size(h, 1), size(h, 2), h, Nzeta, Nthetaz, s, "simpson")
+          uP(i) = 1/spi*s
        end do
     end subroutine
+
+    !BC -----------------------------------------------------
+    subroutine COMPUTE_bc(i_input)
+       implicit none
+       integer, intent(in) :: i_input
+
+       !BC at infinity
+       if (i_input == Nr) then
+          i = Nr
+          do j = 1, Nzeta
+             do K = 1, Nthetaz/2
+                g(i, j, k) = 0d0 !20191218
+             end do
+          end do
+       end if
+       !BC on the sphere
+       if (i_input == 1) then
+          i = 1
+          do j = 1, Nzeta
+             do K = 1, Nthetaz/2
+                g(i, j, k) = 2 !20191218
+             end do
+          end do
+       end if
