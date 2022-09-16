@@ -255,11 +255,11 @@ program main
 
    !------------------------------------------------------------
    !@@@ Physical and numerical parameters ----------------------
-   real(8) :: Kn    !Knudsen number*sqrt(pi)/2
+   real(8) :: Kn =1  !仮決め   !Knudsen number*sqrt(pi)/2
    integer :: Nr = 100    !Nr (maximum value of r)
    integer :: Nthetaz = 100   !Nz (maximum value of theta_zeta)
    integer :: Nzeta = 100  !Nz (maximum value of zeta)
-
+   integer :: Nthetaz2 = 50 ! ほんとはNthetaz/2で定義したい
    !------------------------------------------------------------
    !Physical quantities----------------------------------------
    real(8), allocatable :: r(:), dr(:)            !(0:Nr)
@@ -283,9 +283,9 @@ program main
 
    call COMPUTE_bc(1)
    call COMPUTE_vdf()
-   call COMPUTE_mac()
-   call COMPUTE_bc(Nr)
-
+   ! call COMPUTE_mac()
+   ! call COMPUTE_bc(Nr)
+!print *,g
 contains
    !===========================================================
    !===========================================================
@@ -303,7 +303,7 @@ contains
       allocate (thetaz(0:Nthetaz), dthetaz(1:Nthetaz))
       allocate (g(0:Nr, 0:Nzeta, 0:Nthetaz))
       allocate (uP(0:Nr))
-      allocate (Cap_lambda(0:Nr - 1), lambda(0:Nthetaz))
+      allocate (Cap_lambda(1:Nr - 1), lambda(1:Nthetaz))
    end subroutine
 
    !Set initial setting
@@ -330,7 +330,7 @@ contains
       do i = 1, Nr
          dr(i) = r(i) - r(i - 1)
       end do
-      do i = 0, Nr - 1
+      do i = 1, Nr - 1
          Cap_lambda(i) = dr(i + 1)/dr(i)
       end do
    end subroutine
@@ -340,7 +340,7 @@ contains
       do i = 0, Nzeta
          zeta(i) = Cap_zeta*dble(i)/dble(Nzeta)
       end do
-      do i = 1, Nr
+      do i = 1, Nzeta
          dzeta(i) = zeta(i) - zeta(i - 1)
       end do
    end subroutine
@@ -351,9 +351,9 @@ contains
          thetaz(i) = pi*dble(i)/dble(Nthetaz)
       end do
       do i = 1, Nthetaz
-         dthetaz(i) = thetaz(i) - thetaz(i - 1)
+         dthetaz(i) = thetaz(i) - thetaz(i - 1) !問題あり
       end do
-      do i = 0, Nthetaz - 1
+      do i = 1, Nthetaz - 1
          lambda(i) = dthetaz(i + 1)/dthetaz(i)
       end do
    end subroutine
@@ -367,12 +367,13 @@ contains
       !?��_?��~?��[?��ϐ� Cap_lambda?��?��lambda?��̓O?��?��?��[?��o?��?��?��ŗp?��ӂ�?��?��
       !$omp parallel default(shared), private(i,j,c1,c2,c3)
       !$omp do
-      do k = 1, Nthetaz/2
-         do j = 1, Nzeta
-            do i = 1, Nr
+      do k = 2, Nthetaz2
+         do j = 2, Nzeta
+            do i = 2, Nr
                a1 = (zeta(j)*cos(thetaz(k))/(dr(i - 1) + dr(i)))
-               a2 = (zeta(j)*sin(thetaz(k))/(dthetaz(k - 1) + dthetaz(k)*r(i)))
+               a2 = (zeta(j)*sin(thetaz(k))/((dthetaz(k - 1) + dthetaz(k))*r(i)))
                a3 = a1*(1/Cap_lambda(i - 1) + 2) - a2*(1/lambda(k - 1) + 2) - zeta(j)*cos(thetaz(k))/r(i) - 1/Kn
+               print*,dthetaz(k)
                c1 = (Cap_lambda(i - 1) + 1/Cap_lambda(i - 1) + 2)
                c2 = (lambda(k - 1) + 1/Cap_lambda(k - 1) + 2)
                g(i, j, k) = g(i - 1, j, k)*a1*c1/a3 + g(i - 2, j, k)*a1*Cap_lambda(i - 1)/a3 &
@@ -389,13 +390,13 @@ contains
       use integral_mod
       implicit none
 
-      real(8) :: h(1:Nr, 1:Nthetaz)
+      real(8) :: h(1:Nr, 1:Nthetaz2)
       real(8) :: s
       ! call integral(配列の大きさ,配列,刻み幅,積分結果,積分手法)
       !  call integral(size(w,1),size(w,2),w,hx,hy,s,"simpson")
       do i = 1, Nr
          do j = 1, Nzeta
-            do k = 1, Nthetaz/2
+            do k = 1, Nthetaz2
                h(j, k) = zeta(j)**4*exp(-zeta(j)**2)*sin(thetaz(k))**2*g(i, j, k)
             end do
          end do
@@ -413,7 +414,7 @@ contains
       if (i_input == Nr) then
          i = Nr
          do j = 1, Nzeta
-            do K = 1, Nthetaz/2
+            do K = 1, Nthetaz2
                g(i, j, k) = 0d0
             end do
          end do
@@ -422,7 +423,7 @@ contains
       if (i_input == 1) then
          i = 1
          do j = 1, Nzeta
-            do K = 1, Nthetaz/2
+            do K = 1, Nthetaz2
                g(i, j, k) = 2
             end do
          end do
