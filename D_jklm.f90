@@ -49,7 +49,6 @@ contains
             s = s + ft*wt
          end do
          s = s0*0.5_16 + s*h*mba
-         print *, "s", s
 
          as = abs(s); err = abs(s - s0)
          if (as .ge. 1.0_16) err = err/as
@@ -167,11 +166,16 @@ end module DE_integration
 program main
    use DE_integration
    implicit none
-   real(16), parameter::pi2 = 1.5707963267948966_16
-   real(16), parameter::pi = 3.141592653589793238462643383279502884_16
+   !real(16), parameter::pi2 = 1.5707963267948966_16
+   real(16), parameter::pi = acos(-1.0q0)
+   !real(16), parameter::pi = 3.141592653589793238462643383279502884_16
+   real(16), parameter::pi2 = pi/2.0q0
 
    real(16):: eps = 1d-24, s = 0q0
    real(16):: alpha, beta, gamma, delta
+   real(16):: zeta_l, theta_m
+   real(16):: val_kiki_1, val_kiki_2
+
    !eps = 1d-24; s = 0.0_16
    integer::info
    real(16) :: Cap_theta = 100.0_16
@@ -181,30 +185,80 @@ program main
 
    !------------------------------------------------------------
    !@@@ Physical and numerical parameters ----------------------
-   integer, parameter :: Kmax = 100   !Nz (maximum value of theta)
+   integer, parameter :: Kmax = 100  !Nz (maximum value of theta)
    integer, parameter :: Jmax = 100  !Nz (maximum value of zeta)
    integer, parameter :: Lmax = 100  !Nz (maximum value of zeta)
    integer, parameter :: Mmax = 100  !Nz (maximum value of zeta)
    !------------------------------------------------------------
    !Physical quantities----------------------------------------
-   real(16), allocatable :: zeta(:), theta(:)
+   real(16), allocatable :: zeta(:), theta(:), K_jklm(:, :, :, :)
    !for integral index
-   integer::i, j, k, l
+   integer::i, j, k, l, m
+   integer:: a_l, b_l, c_m, d_m, a_l_p, b_l_p, c_m_p, d_m_p, a_l_m, b_l_m, c_m_m, d_m_m
    allocate (zeta(0:Jmax), theta(0:Kmax))
+   allocate (K_jklm(0:Jmax, 0:Kmax, 0:Lmax, 0:Mmax))
    do i = 0, Jmax
       zeta(i) = Cap_zeta*(i*1q0)/(Jmax*1q0)
    end do
    do k = 0, Kmax
       theta(k) = pi*(k*1q0)/(Kmax*1q0)
    end do
-   print *, "zeta", zeta(1), "theta", theta(1)
-   alpha = 0.0q0; beta = 2.0q0; gamma = 0.0q0; delta = pi/50q0
-   !call dde3d(L1,zeta(1),theta(1),zeta(0),zeta(2),theta(0),theta(2), 0.0_16, 1.0_16, 0.0_16, pi/100.0_16, 0.0_16, 2*pi, eps, s, info)
-   !!9.033969976609827287099592928924005E-0006
-   call dde3d(L1, zeta(1), theta(1), alpha, beta, gamma, delta, 0.0_16, 1.0_16, 0.0_16, pi/100.0_16, 0.0_16, 2*pi, eps, s, info)
-   print *, s! 9.596087731032261608563067133300942E-0010
-   print *, L1(1.0q0, 1.0q0, 1.0q0, zeta(1), theta(1), alpha, beta, gamma, delta)! -8.022711679671201503181953271830736E-0005
+   ! do j = 0, Jmax
+   !    do k = 0, Kmax
+   !       do l = 0, Kmax
+   !          do m = 0, Kmax
+   !if (l .eq. 0 .and. m .eq. 0) then
 
+   ! else if (l .eq. 0 .and. m .eq. Mmax) then
+   !    continue
+   ! else if (l .eq. Lmax .and. m .eq. 0) then
+   !    continue
+   ! else if (l .eq. Lmax .and. m .eq. Mmax) then
+   !    continue
+   ! else
+   !             if (mod(l, 2) .eq. 1 .and. mod(m, 2) .eq. 1) then
+   !                a_l = l - 1; b_l = l + 1; c_m = m - 1; d_m = m + 1
+   !                zeta_l = zeta(j); theta_m = theta(k)
+   !                alpha = zeta(j - 1); beta = zeta(j + 1); gamma = theta(k - 1); delta = theta(k + 1)
+   !                if (0 .le. a_l .and. a_l .le. Lmax .and. 0 .le. b_l .and. b_l .le. Lmax .and. 0 .le. c_m .and. c_m .le. Mmax.and.0 .le. d_m .and. d_m .le. Mmax)then
+   !                   call dde3d(L1, zeta_l, theta_m, alpha, beta, gamma, delta, zeta(a_l), zeta(b_l), &
+   !                              theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+   !                   val_kiki_1 = s
+   !                   s = 0.0q0
+   !                   call dde3d(L2, zeta_l, theta_m, alpha, beta, gamma, delta, zeta(a_l), zeta(b_l), &
+   !                              theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+
+   !                   val_kiki_2 = s
+   !                   s = 0.0q0
+   !                else
+   !                   val_kiki_1 = 0.0q0
+   !                   val_kiki_2 = 0.0q0
+   !                end if
+   !                K_jklm(j, k, l, m) = val_kiki_1 + val_kiki_2
+   !                print *, "j=", j, "k=", k, "l=", l, "m=", m, "K_jklm=", K_jklm(j, k, l, m)
+   !             end if
+   !          end do
+   !       end do
+   !    end do
+   ! end do
+   j = 1; k = 1; l = 1; m = 5
+   a_l = l - 1; b_l = l + 1; c_m = m - 1; d_m = m + 1
+   zeta_l = zeta(j); theta_m = theta(k)
+   alpha = zeta(j - 1); beta = zeta(j + 1); gamma = theta(k - 1); delta = theta(k + 1)
+   call dde3d(L1, zeta_l, theta_m, alpha, beta, gamma, delta, zeta(a_l), zeta(b_l), &
+              theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+   val_kiki_1 = s
+   s = 0.0q0
+   call dde3d(L2, zeta_l, theta_m, alpha, beta, gamma, delta, zeta(a_l), zeta(b_l), &
+              theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+   val_kiki_2 = s
+   s = 0.0q0
+   K_jklm(j, k, l, m) = val_kiki_1 + val_kiki_2
+   print *, K_jklm(j, k, l, m)
+   ! call dde3d(L1, zeta(1), theta(1), alpha, beta, gamma, delta, 0.0_16, 1.0_16, 0.0_16, pi/100.0_16, 0.0_16, 2*pi, eps, s, info)
+   ! print *, s! 9.596087731032261608563067133300942E-0010
+   ! print *, L1(1.0q0, 1.0q0, 1.0q0, zeta(1), theta(1), alpha, beta, gamma, delta)! -8.022711679671201503181953271830736E-0005
+!https://www.wolframalpha.com/input?i=Integrate%5BIntegrate%5BIntegrate%5Bx%5E2%2B1-2*x*cos%28y%29*cos%28%CF%80%2F100%29-2*x*sin%28y%29*sin%28%CF%80%2F100%29*cos%28z%29%2C%7Bz%2C0%2C2*%CF%80%7D%5D%2C%7By%2C0%2C%CF%80%2F100%7D%5D%2C%7Bx%2C0%2C1%7D%5D&lang=ja
    ! -1.961747754100960317717098015371201E-0009
 contains
    function F1(zeta_bar, theta_bar, psi, zeta_f, theta_f)!計算できる
@@ -239,6 +293,16 @@ contains
            /sqrt(F1(zeta_bar, theta_bar, psi, zeta_f, theta_f)) &
            *exp(-zeta_bar**2 + F2(zeta_bar, theta_bar, psi, zeta_f, theta_f) &
                 /F1(zeta_bar, theta_bar, psi, zeta_f, theta_f)) &
+           *f_for_psi(zeta_bar, theta_bar, zeta_f, theta_f, alpha, beta, gamma, delta)
+   end function
+   function L2(zeta_bar, theta_bar, psi, zeta_f, theta_f, alpha, beta, gamma, delta)!計算できない
+      implicit none
+      real(16), intent(in)::zeta_bar, theta_bar, psi, zeta_f, theta_f, alpha, beta, gamma, delta
+      real(16)::L2
+
+      L2 = zeta_bar*zeta_bar*sin(theta_bar)/2/sqrt(2.0q0)/pi*cos(psi) &
+           *sqrt(F1(zeta_bar, theta_bar, psi, zeta_f, theta_f)) &
+           *exp(-zeta_bar**2) &
            *f_for_psi(zeta_bar, theta_bar, zeta_f, theta_f, alpha, beta, gamma, delta)
    end function
    ! function f_check(zeta_bar, theta_bar, psi)
