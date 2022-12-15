@@ -178,6 +178,7 @@ program main
    real(16):: zeta_l, theta_m, zeta_j, theta_k
    real(16):: val_kiki_1, val_kiki_2
    real(16)::val_gugu_pp_1, val_gugu_pp_2, val_gugu_pm_1, val_gugu_pm_2, val_gugu_mp_1, val_gugu_mp_2, val_gugu_mm_1, val_gugu_mm_2
+   real(16)::val_kigu_0p_1, val_kigu_0p_2, val_kigu_0m_1, val_kigu_0m_2, val_guki_p0_1, val_guki_p0_2, val_guki_m0_1, val_guki_m0_2
    real(16):: val1, val2, val3, val4!特異点を避ける積分範囲の値
    !eps = 1d-24; s = 0.0_16
    integer::info
@@ -189,7 +190,7 @@ program main
    !------------------------------------------------------------
    !@@@ Physical and numerical parameters ----------------------
    integer, parameter :: Kmax = 100  !Nz (maximum value of theta)
-   integer, parameter :: Jmax = 100  !Nz (maximum value of zeta)
+   integer, parameter :: Jmax = 100 !Nz (maximum value of zeta)
    integer, parameter :: Lmax = 100  !Nz (maximum value of zeta)
    integer, parameter :: Mmax = 100  !Nz (maximum value of zeta)
    !------------------------------------------------------------
@@ -200,49 +201,58 @@ program main
    integer:: a_l, b_l, c_m, d_m, a_l_p, a_l_m, b_l_p, b_l_m, c_m_p, c_m_m, d_m_p, d_m_m
    allocate (zeta(0:Jmax), theta(0:Kmax))
    allocate (K_jklm(0:Jmax, 0:Kmax, 0:Lmax, 0:Mmax))
+   !$omp parallel do
    do i = 0, Jmax
       zeta(i) = Cap_zeta*(i*1q0)/(Jmax*1q0)
    end do
+   !$omp parallel do
    do k = 0, Kmax
       theta(k) = pi*(k*1q0)/(Kmax*1q0)
    end do
-   do j = 0, Jmax
+   !$omp parallel do
+   do j = 0, Jmax!j=0では常にL1,L2は0
       do k = 0, Kmax
-         do l = 0, Kmax
-            do m = 0, Kmax
+         do l = 0, Lmax
+            do m = 0, Mmax
                zeta_l = zeta(l); theta_m = theta(m); zeta_j = zeta(j); theta_k = theta(k)
 
-               if (j .eq. 0) then ! j=0のときは計算もっと楽
+               if (j .eq. 0 .or. k .eq. 0 .or. k .eq. Kmax) then ! j=0のときは計算もっと楽
+                  K_jklm(j, k, l, m) = 0.0q0
 
                   !----------------奇数奇数---------------
+               else
                   if (mod(l, 2) .eq. 1 .and. mod(m, 2) .eq. 1) then!奇数奇数
                      a_l = l - 1; b_l = l + 1; c_m = m - 1; d_m = m + 1
                      alpha = zeta(l - 1); beta = zeta(l + 1); gamma = theta(m - 1); delta = theta(m + 1)
                      if (0 .le. a_l .and. a_l .le. Lmax .and. 0 .le. b_l .and. b_l .le. Lmax &
                          .and. 0 .le. c_m .and. c_m .le. Mmax .and. 0 .le. d_m .and. d_m .le. Mmax) then
+
                         if (zeta(a_l) .le. zeta_j .and. zeta_j .le. zeta(b_l) &
-                            .and. theta(m - 1) .le. theta_k .and. theta_k .le. theta(m + 1)) then!特異点があるとき
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                            .and. theta(c_m) .le. theta_k .and. theta_k .le. theta(d_m)) then!特異点があるとき
+                           print *, "singurality"
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l), zeta_j, theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
                            val1 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l), theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
                            val2 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l), zeta_j, theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
                            val3 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l), theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
                            val4 = s
                            s = 0.0q0
                            val_kiki_1 = val1 + val2 + val3 + val4
+
                         else
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l), zeta(b_l), theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
                            val_kiki_1 = s
+                           print *, "no singurality"
                         end if
                         call dde3d(L2, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, zeta(a_l), zeta(b_l), &
                                    theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
@@ -266,25 +276,25 @@ program main
 
                         if (zeta(a_l_p) .le. zeta_j .and. zeta_j .le. zeta(b_l_p) &
                             .and. theta(c_m_p) .le. theta_k .and. theta_k .le. theta(d_m_p)) then!特異点があるとき
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta_j, theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
                            val1 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_p), theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
                            val2 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta_j, theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!左上
                            val3 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_p), theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!右上
                            val4 = s
                            s = 0.0q0
                            val_gugu_pp_1 = val1 + val2 + val3 + val4
                         else
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta(b_l_p), theta(c_m_p), theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)
                            val_gugu_pp_1 = s
                            s = 0.0q0
@@ -304,25 +314,25 @@ program main
 
                         if (zeta(a_l_p) .le. zeta_j .and. zeta_j .le. zeta(b_l_p) &
                             .and. theta(c_m_m) .le. theta_k .and. theta_k .le. theta(d_m_m)) then!特異点があるとき
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta_j, theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
                            val1 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_p), theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
                            val2 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta_j, theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
                            val3 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_p), theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
                            val4 = s
                            s = 0.0q0
                            val_gugu_pm_1 = val1 + val2 + val3 + val4
                         else
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_p), zeta(b_l_p), theta(c_m_m), theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)
                            val_gugu_pm_1 = s
                            s = 0.0q0
@@ -342,25 +352,25 @@ program main
 
                         if (zeta(a_l_m) .le. zeta_j .and. zeta_j .le. zeta(b_l_m) &
                             .and. theta(c_m_p) .le. theta_k .and. theta_k .le. theta(d_m_p)) then!特異点があるとき
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta_j, theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
                            val1 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_m), theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
                            val2 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta_j, theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!左上
                            val3 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_m), theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!右上
                            val4 = s
                            s = 0.0q0
                            val_gugu_mp_1 = val1 + val2 + val3 + val4
                         else
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta(b_l_m), theta(c_m_p), theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)
                            val_gugu_mp_1 = s
                            s = 0.0q0
@@ -380,25 +390,25 @@ program main
 
                         if (zeta(a_l_m) .le. zeta_j .and. zeta_j .le. zeta(b_l_m) &
                             .and. theta(c_m_m) .le. theta_k .and. theta_k .le. theta(d_m_m)) then!特異点があるとき
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta_j, theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
                            val1 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_m), theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
                            val2 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta_j, theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
                            val3 = s
                            s = 0.0q0
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta_j, zeta(b_l_m), theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
                            val4 = s
                            s = 0.0q0
                            val_gugu_mm_1 = val1 + val2 + val3 + val4
                         else
-                           call dde3d(L1_j0, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
                                       zeta(a_l_m), zeta(b_l_m), theta(c_m_m), theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)
                            val_gugu_mm_1 = s
                            s = 0.0q0
@@ -413,12 +423,177 @@ program main
                      end if
                      K_jklm(j, k, l, m) = val_gugu_pp_1 + val_gugu_pp_2 + val_gugu_pm_1 + val_gugu_pm_2 &
                                           + val_gugu_mp_1 + val_gugu_mp_2 + val_gugu_mm_1 + val_gugu_mm_2
-
+!-----------------奇数偶数------------------!-----------------奇数偶数------------------!-----------------奇数偶数------------------
                      !-----------------奇数偶数------------------
                   else if (mod(l, 2) .eq. 1 .and. mod(m, 2) .eq. 0) then
+                     a_l = l - 1; b_l = l + 1; c_m_p = m; d_m_p = m + 2; ! こいつらは積分区間の中身　マイナスになるときは範囲外なので積分しない　そのためだけの変数です
+                     c_m_m = m - 2; d_m_m = m  ! こいつらは積分区間の中身　マイナスになるときは範囲外なので積分しない　そのためだけの変数です
+
+                     !-----------------------0p---------------------m_pになる要チェック
+                     if (0 .le. a_l .and. a_l .le. Lmax .and. 0 .le. b_l .and. b_l .le. Lmax .and. &!pp
+                         0 .le. c_m_p .and. c_m_p .le. Mmax .and. 0 .le. d_m_p .and. d_m_p .le. Mmax) then
+                        alpha = zeta(l + 1); beta = zeta(l - 1); gamma = theta(m + 1); delta = theta(m + 2)
+
+                        if (zeta(a_l) .le. zeta_j .and. zeta_j .le. zeta(b_l) &
+                            .and. theta(c_m_p) .le. theta_k .and. theta_k .le. theta(d_m_p)) then!特異点があるとき
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta_j, theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
+                           val1 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l), theta(c_m_p), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
+                           val2 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta_j, theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!左上
+                           val3 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l), theta_k, theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)!右上
+                           val4 = s
+                           s = 0.0q0
+                           val_kigu_0p_1 = val1 + val2 + val3 + val4
+                        else
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta(b_l), theta(c_m_p), theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)
+                           val_kigu_0p_1 = s
+                           s = 0.0q0
+                        end if
+                        call dde3d(L2, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                   zeta(a_l), zeta(b_l), theta(c_m_p), theta(d_m_p), 0.0q0, 2.0q0*pi, eps, s, info)
+                        val_kigu_0p_2 = s
+                        s = 0.0q0
+                     else
+                        val_kigu_0p_1 = 0.0q0
+                        val_kigu_0p_2 = 0.0q0
+                     end if
+                     !-----------------------0m---------------------m_mになる要チェック
+                     if (0 .le. a_l .and. a_l .le. Lmax .and. 0 .le. b_l .and. b_l .le. Lmax .and. &!pm
+                         0 .le. c_m_m .and. c_m_m .le. Mmax .and. 0 .le. d_m_m .and. d_m_m .le. Mmax) then
+                        alpha = zeta(l + 1); beta = zeta(l - 1); gamma = theta(m - 1); delta = theta(m - 2)
+
+                        if (zeta(a_l) .le. zeta_j .and. zeta_j .le. zeta(b_l) &
+                            .and. theta(c_m_m) .le. theta_k .and. theta_k .le. theta(d_m_m)) then!特異点があるとき
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta_j, theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
+                           val1 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l), theta(c_m_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
+                           val2 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta_j, theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
+                           val3 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l), theta_k, theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
+                           val4 = s
+                           s = 0.0q0
+                           val_kigu_0m_1 = val1 + val2 + val3 + val4
+                        else
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l), zeta(b_l), theta(c_m_m), theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                           val_kigu_0m_1 = s
+                           s = 0.0q0
+                        end if
+                        call dde3d(L2, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                   zeta(a_l), zeta(b_l), theta(c_m_m), theta(d_m_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                        val_kigu_0m_2 = s
+                        s = 0.0q0
+                     else
+                        val_kigu_0m_1 = 0.0q0
+                        val_kigu_0m_2 = 0.0q0
+                     end if
+                     K_jklm(j, k, l, m) = val_kigu_0p_1 + val_kigu_0p_2 + val_kigu_0m_1 + val_kigu_0m_2
+
+                     !------------------偶数奇数-------------------!------------------偶数奇数-------------------!------------------偶数奇数-------------------!------------------偶数奇数-------------------!------------------偶数奇数-------------------
+                  else if (mod(l, 2) .eq. 0 .and. mod(m, 2) .eq. 1) then
+                     a_l_p = l + 1; b_l_p = l + 2; a_l_m = l - 1; b_l_p = l - 2 ! こいつらは積分区間の中身　マイナスになるときは範囲外なので積分しない　そのためだけの変数です
+                     c_m = m - 1; d_m = m + 1  ! こいつらは積分区間の中身　マイナスになるときは範囲外なので積分しない　そのためだけの変数です
+
+                     !-----------------------p0---------------------l_pになる要チェック
+                     if (0 .le. a_l_p .and. a_l_p .le. Lmax .and. 0 .le. b_l_p .and. b_l_p .le. Lmax .and. &!pp
+                         0 .le. c_m .and. c_m .le. Mmax .and. 0 .le. d_m .and. d_m .le. Mmax) then
+                        alpha = zeta(l + 1); beta = zeta(l + 2); gamma = theta(m + 1); delta = theta(m - 1)
+
+                        if (zeta(a_l_p) .le. zeta_j .and. zeta_j .le. zeta(b_l_p) &
+                            .and. theta(c_m) .le. theta_k .and. theta_k .le. theta(d_m)) then!特異点があるとき
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_p), zeta_j, theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
+                           val1 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l_p), theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
+                           val2 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_p), zeta_j, theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
+                           val3 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l_p), theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
+                           val4 = s
+                           s = 0.0q0
+                           val_guki_p0_1 = val1 + val2 + val3 + val4
+                        else
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_p), zeta(b_l_p), theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                           val_guki_p0_1 = s
+                           s = 0.0q0
+                        end if
+                        call dde3d(L2, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                   zeta(a_l_p), zeta(b_l_p), theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                        val_guki_p0_2 = s
+                        s = 0.0q0
+                     else
+                        val_guki_p0_1 = 0.0q0
+                        val_guki_p0_2 = 0.0q0
+                     end if
+                     !-----------------------m0---------------------l_mになる要チェック
+                     if (0 .le. a_l_m .and. a_l_m .le. Lmax .and. 0 .le. b_l_m .and. b_l_m .le. Lmax .and. &!pm
+                         0 .le. c_m .and. c_m .le. Mmax .and. 0 .le. d_m .and. d_m .le. Mmax) then
+                        alpha = zeta(l - 1); beta = zeta(l - 2); gamma = theta(m - 1); delta = theta(m + 1)
+
+                        if (zeta(a_l_m) .le. zeta_j .and. zeta_j .le. zeta(b_l_m) &
+                            .and. theta(c_m) .le. theta_k .and. theta_k .le. theta(d_m)) then!特異点があるとき
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_m), zeta_j, theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!左下
+                           val1 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l_m), theta(c_m), theta_k, 0.0q0, 2.0q0*pi, eps, s, info)!右下
+                           val2 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_m), zeta_j, theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!左上
+                           val3 = s
+                           s = 0.0q0
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta_j, zeta(b_l_m), theta_k, theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)!右上
+                           val4 = s
+                           s = 0.0q0
+                           val_guki_m0_1 = val1 + val2 + val3 + val4
+                        else
+                           call dde3d(L1, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                      zeta(a_l_m), zeta(b_l_m), theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                           val_guki_m0_1 = s
+                           s = 0.0q0
+                        end if
+                        call dde3d(L2, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta, &
+                                   zeta(a_l_m), zeta(b_l_m), theta(c_m), theta(d_m), 0.0q0, 2.0q0*pi, eps, s, info)
+                        val_guki_m0_2 = s
+                        s = 0.0q0
+                     else
+                        val_guki_m0_1 = 0.0q0
+                        val_guki_m0_2 = 0.0q0
+                     end if
+                     K_jklm(j, k, l, m) = val_guki_p0_1 + val_guki_p0_2 + val_guki_m0_1 + val_guki_m0_2
 
                   end if
+
                end if
+               print *, "j", j, "k", k, "l", l, "m", m, K_jklm(j, k, l, m)
             end do
          end do
       end do
@@ -509,6 +684,13 @@ contains
                 /F1(zeta_bar, theta_bar, psi, zeta_j, theta_k)) &
            *f_for_psi(zeta_bar, theta_bar, zeta_l, theta_m, alpha, beta, gamma, delta)
    end function
+   function L1_check(zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta)!計算できない
+      implicit none
+      real(16), intent(in)::zeta_bar, theta_bar, psi, zeta_j, zeta_l, theta_m, theta_k, alpha, beta, gamma, delta
+      real(16)::L1_check
+
+      L1_check = 1/sqrt(F1(zeta_bar, theta_bar, psi, zeta_j, theta_k))
+   end function!時間かかるだけでちゃんと機能してる
    function L2(zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta)!計算できない
       implicit none
       real(16), intent(in)::zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta
@@ -519,7 +701,9 @@ contains
            *exp(-zeta_bar**2) &
            *f_for_psi(zeta_bar, theta_bar, zeta_l, theta_m, alpha, beta, gamma, delta)
    end function
-   function L1_j0(zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta)!計算できない
+   !つねに0
+   !https://www.wolframalpha.com/input?i=Integrate%5BIntegrate%5BIntegrate%5Bx%5E2*cos%28z%29*sin%28y%29*exp%28-x%5E2%29*%28x%29*%28x-2%29*%28y%29*%28y-%CF%80%2F50%29%2F%28sqrt%282%29*%CF%80*%281-2%29*%28%CF%80%2F100%29*%28%CF%80%2F100-%CF%80%2F50%29%29%2C%7Bx%2C0%2C2%7D%5D%2C%7By%2C0%2C%CF%80%2F50%7D%5D%2C%7Bz%2C0%2C2*%CF%80%7D%5D&lang=ja
+   function L1_j0(zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta)
       implicit none
       real(16), intent(in)::zeta_bar, theta_bar, psi, zeta_j, theta_k, zeta_l, theta_m, alpha, beta, gamma, delta
       real(16)::L1_j0
